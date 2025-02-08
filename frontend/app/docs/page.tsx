@@ -3,21 +3,21 @@
 import Image from "next/image"
 import { Card } from "../../components/ui/card"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism"
 
 // Custom theme based on oneDark but without text background
 const customTheme = {
-  ...oneDark,
+  ...oneLight,
   'code[class*="language-"]': {
-    ...oneDark['code[class*="language-"]'],
+    ...oneLight['code[class*="language-"]'],
     backgroundColor: 'transparent',
   },
   'pre[class*="language-"]': {
-    ...oneDark['pre[class*="language-"]'],
+    ...oneLight['pre[class*="language-"]'],
     backgroundColor: 'transparent',
   },
   'token': {
-    ...oneDark['token'],
+    ...oneLight['token'],
     backgroundColor: 'transparent',
   }
 }
@@ -550,7 +550,7 @@ export default function DocsPage() {
                   <h3 className="text-xl font-semibold">Managed API</h3>
                 </div>
                 <p className="text-muted-foreground">
-                  Use our managed API endpoint for the quickest setup:
+                  Use your managed API endpoint for the quickest setup:
                 </p>
                 <div className="font-mono text-lg text-primary">
                   https://api.deepclaude.com/

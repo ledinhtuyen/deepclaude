@@ -1,0 +1,9 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-api-repo/deepclaude-api:${_VERSION}', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-api-repo/deepclaude-api:${_VERSION}']
+
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-api-repo/deepclaude-api:${_VERSION}'

@@ -1,0 +1,9 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-nginx-repo/deepclaude-nginx:latest', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-nginx-repo/deepclaude-nginx:latest']
+
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/deepclaude-nginx-repo/deepclaude-nginx:latest'

@@ -16,8 +16,7 @@ import { useForm } from "react-hook-form"
 interface SettingsFormValues {
   model: string
   systemPrompt: string
-  deepseekApiToken: string
-  anthropicApiToken: string
+  openRouterApiToken: string
   deepseekHeaders: { key: string; value: string }[]
   deepseekBody: { key: string; value: string }[]
   anthropicHeaders: { key: string; value: string }[]
@@ -25,7 +24,9 @@ interface SettingsFormValues {
 }
 
 interface SettingsProps {
-  onSettingsChange: (settings: { deepseekApiToken: string; anthropicApiToken: string }) => void
+  onSettingsChange: (settings: { 
+    openRouterApiToken: string;
+  }) => void
 }
 
 export function Settings({ onSettingsChange }: SettingsProps) {
@@ -36,8 +37,7 @@ export function Settings({ onSettingsChange }: SettingsProps) {
   const form = useForm<SettingsFormValues>({
     defaultValues: {
       systemPrompt: "You are a helpful AI assistant who excels at reasoning and responds in Markdown format. For code snippets, you wrap them in Markdown codeblocks with it's language specified.",
-      deepseekApiToken: "",
-      anthropicApiToken: "",
+      openRouterApiToken: "",
       deepseekHeaders: [],
       deepseekBody: [],
       anthropicHeaders: [{ key: "anthropic-version", value: "2023-06-01" }],
@@ -52,38 +52,46 @@ export function Settings({ onSettingsChange }: SettingsProps) {
       const settings = JSON.parse(savedSettings)
       form.reset(settings)
       onSettingsChange({
-        deepseekApiToken: settings.deepseekApiToken,
-        anthropicApiToken: settings.anthropicApiToken
+        openRouterApiToken: settings.openRouterApiToken
       })
     }
   }, [form, onSettingsChange])
 
   // Debounced save function
-  const debouncedSave = useCallback((data: SettingsFormValues) => {
+  const debouncedSave = useCallback(async (data: SettingsFormValues) => {
+    // Save to localStorage
     localStorage.setItem('deepclaude-settings', JSON.stringify(data))
-    onSettingsChange({
-      deepseekApiToken: data.deepseekApiToken,
-      anthropicApiToken: data.anthropicApiToken
-    })
+    
+    // Save API tokens to .env file
+    try {
+      onSettingsChange({
+        openRouterApiToken: data.openRouterApiToken
+      })
 
-    // Track settings update
-    posthog.capture('settings_updated', {
-      model: data.model,
-      has_deepseek_token: !!data.deepseekApiToken,
-      has_anthropic_token: !!data.anthropicApiToken,
-      has_system_prompt: !!data.systemPrompt,
-      deepseek_headers_count: data.deepseekHeaders.length,
-      deepseek_body_count: data.deepseekBody.length,
-      anthropic_headers_count: data.anthropicHeaders.length,
-      anthropic_body_count: data.anthropicBody.length,
-      timestamp: new Date().toISOString()
-    })
+      // Track settings update
+      posthog.capture('settings_updated', {
+        model: data.model,
+        has_openrouter_token: !!data.openRouterApiToken,
+        has_system_prompt: !!data.systemPrompt,
+        deepseek_headers_count: data.deepseekHeaders.length,
+        deepseek_body_count: data.deepseekBody.length,
+        anthropic_headers_count: data.anthropicHeaders.length,
+        anthropic_body_count: data.anthropicBody.length,
+        timestamp: new Date().toISOString()
+      })
 
-    toast({
-      variant: "success",
-      description: "Settings saved to local storage",
-      duration: 2000,
-    })
+      toast({
+        variant: "success",
+        description: "Settings saved successfully",
+        duration: 2000,
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        description: "Failed to save settings",
+        duration: 2000,
+      })
+    }
   }, [onSettingsChange, toast, posthog])
 
   const debouncedSaveCallback = useMemo(
@@ -106,8 +114,7 @@ export function Settings({ onSettingsChange }: SettingsProps) {
   const handleReset = () => {
     form.reset({
       systemPrompt: "You are a helpful AI assistant who excels at reasoning and responds in Markdown format. For code snippets, you wrap them in Markdown codeblocks with it's language specified.",
-      deepseekApiToken: "",
-      anthropicApiToken: "",
+      openRouterApiToken: "",
       deepseekHeaders: [],
       deepseekBody: [],
       anthropicHeaders: [{ key: "anthropic-version", value: "2023-06-01" }],
@@ -115,8 +122,7 @@ export function Settings({ onSettingsChange }: SettingsProps) {
     })
     localStorage.removeItem('deepclaude-settings')
     onSettingsChange({
-      deepseekApiToken: "",
-      anthropicApiToken: ""
+      openRouterApiToken: ""
     })
 
     // Track settings reset
@@ -197,7 +203,7 @@ export function Settings({ onSettingsChange }: SettingsProps) {
             <Settings2 className="h-4 w-4" />
             Configure
           </Button>
-          {!form.getValues("deepseekApiToken") || !form.getValues("anthropicApiToken") ? (
+          {!form.getValues("openRouterApiToken") ? (
             <div className="absolute top-[48px] right-0 bg-muted text-muted-foreground px-4 py-2 rounded-lg text-sm border border-border before:content-[''] before:absolute before:top-[-6px] before:right-6 before:w-3 before:h-3 before:bg-muted before:border-l before:border-t before:border-border before:rotate-45">
               Configure API tokens to start
             </div>
@@ -226,8 +232,7 @@ export function Settings({ onSettingsChange }: SettingsProps) {
                   const data = form.getValues()
                   localStorage.setItem('deepclaude-settings', JSON.stringify(data))
                   onSettingsChange({
-                    deepseekApiToken: data.deepseekApiToken,
-                    anthropicApiToken: data.anthropicApiToken
+                    openRouterApiToken: data.openRouterApiToken
                   })
                   toast({
                     variant: "success",
@@ -249,31 +254,14 @@ export function Settings({ onSettingsChange }: SettingsProps) {
             <div className="space-y-6">
               <FormField
                 control={form.control}
-                name="deepseekApiToken"
+                name="openRouterApiToken"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>DeepSeek API Token</FormLabel>
+                    <FormLabel>OpenRouter API Token</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder="Enter DeepSeek API token..."
-                        {...field}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="anthropicApiToken"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Anthropic API Token</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="Enter Anthropic API token..."
+                        placeholder="Enter OpenRouter API token..."
                         {...field}
                       />
                     </FormControl>

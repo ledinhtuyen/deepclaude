@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',  // Changed from 'standalone' to 'export'
-  distDir: 'dist',   // This will output to './dist' instead of '.next'
+  output: 'standalone',  // Changed from 'standalone' to 'export'
   images: {
     unoptimized: true, // Required for 'export'
   }

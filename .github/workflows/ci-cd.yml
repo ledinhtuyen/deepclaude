@@ -1,0 +1,74 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGION: asia-northeast1
+  VERSION: ${{ github.sha }}
+
+jobs:
+  build-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: dev  # Add environment
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    - id: auth
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        # Add workload_identity_provider if using Workload Identity Federation
+        # workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Configure Docker
+      run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+    - name: Build & Push API
+      run: |
+        cd api
+        gcloud builds submit --config=cloudbuild.yaml \
+          --substitutions=_REGION=${{ env.REGION }},_PROJECT_ID=${{ secrets.DEV_PROJECT_ID }},_VERSION=${{ env.VERSION }}
+        
+    - name: Build & Push Frontend
+      run: |
+        cd frontend
+        gcloud builds submit --config=cloudbuild.yaml \
+          --substitutions=_REGION=${{ env.REGION }},_PROJECT_ID=${{ secrets.DEV_PROJECT_ID }},_VERSION=${{ env.VERSION }}
+        
+    - name: Build & Push Nginx
+      run: |
+        cd nginx
+        gcloud builds submit --config=cloudbuild.yaml \
+          --substitutions=_REGION=${{ env.REGION }},_PROJECT_ID=${{ secrets.DEV_PROJECT_ID }}
+
+    - name: Deploy Cloud Run Service
+      run: |
+        gcloud --quiet config set run/region ${{ env.REGION }}
+        gcloud run deploy deepclaude-service \
+          --container nginx \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.DEV_PROJECT_ID }}/deepclaude-nginx-repo/deepclaude-nginx:latest \
+          --port=80 \
+          --container deepclaude-api \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.DEV_PROJECT_ID }}/deepclaude-api-repo/deepclaude-api:${{ env.VERSION }} \
+          --container deepclaude-web \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.DEV_PROJECT_ID }}/deepclaude-web-repo/deepclaude-web:${{ env.VERSION }}
+
+    - name: Verify Deployment
+      if: github.ref == 'refs/heads/main'
+      env:
+        PROJECT_ID: ${{ secrets.DEV_PROJECT_ID }}  # Use dev project id
+      run: |
+        gcloud run services describe deepclaude-service \
+          --project=${PROJECT_ID} \
+          --region=${{ env.REGION }} \
+          --format='get(status.url)' \
+          --platform=managed

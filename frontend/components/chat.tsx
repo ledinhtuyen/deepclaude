@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { ChevronRight, ChevronDown, Loader2, Settings2, PlusCircle, Trash2, Github } from "lucide-react"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { CopyButton } from "@/components/ui/copy-button"
 import { MarkdownEditor } from "@/components/ui/markdown-editor"
 import { usePostHog } from "../providers/posthog"
@@ -38,8 +38,7 @@ interface ChatProps {
   selectedModel: string
   onModelChange: (model: string) => void
   apiTokens: {
-    deepseekApiToken: string
-    anthropicApiToken: string
+    openRouterApiToken: string
   }
 }
 
@@ -231,13 +230,13 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
             <SyntaxHighlighter
               language={language}
               style={{
-                ...oneDark,
+                ...oneLight,
                 'pre[class*="language-"]': {
-                  ...oneDark['pre[class*="language-"]'],
+                  ...oneLight['pre[class*="language-"]'],
                   background: 'none',
                 },
                 'code[class*="language-"]': {
-                  ...oneDark['code[class*="language-"]'],
+                  ...oneLight['code[class*="language-"]'],
                   background: 'none',
                 }
               }}
@@ -332,7 +331,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
     const MemoizedMessageContent = React.memo(({ message, index }: { message: Message; index: number }) => {
       if (message.role === "user") {
         return (
-          <div className="prose prose-zinc dark:prose-invert max-w-none bg-primary/10 rounded-lg px-4 py-3 message-transition" data-loaded="true">
+          <div className="prose prose-zinc light:prose-invert max-w-none bg-primary/10 rounded-lg px-4 py-3 message-transition" data-loaded="true">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw, rehypeSanitize]}
@@ -387,7 +386,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
               </div>
             </Collapsible>
           )}
-          <div className="prose prose-zinc dark:prose-invert max-w-none bg-muted/30 rounded-lg px-4 py-3 relative message-transition" data-loaded="true">
+          <div className="prose prose-zinc light:prose-invert max-w-none bg-muted/30 rounded-lg px-4 py-3 relative message-transition" data-loaded="true">
             {!isLoading && <CopyButton value={message.content} src="message" />}
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
@@ -406,16 +405,21 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
   }, [openThinking, renderers, isLoading, elapsedTime, isThinkingComplete])
 
   const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return
-    if (!apiTokens.deepseekApiToken || !apiTokens.anthropicApiToken) return
+    if (!input.trim() && isLoading) return
+
+    // Check if we have either openRouter token OR (deepseek AND anthropic tokens)
+    if (!apiTokens.openRouterApiToken) {
+        alert("Please configure required API tokens in settings first");
+        return;
+    }
 
     // Track message sent
     posthog.capture('message_sent', {
-      chat_id: currentChatId,
-      model: currentModel,
-      message_length: input.length,
-      has_code: input.includes('```'),
-      timestamp: new Date().toISOString()
+        chat_id: currentChatId,
+        model: currentModel,
+        message_length: input.length,
+        has_code: input.includes('```'),
+        timestamp: new Date().toISOString()
     })
 
     // Create new chat if none exists
@@ -437,10 +441,17 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
       content: input
     }
 
-    setMessages(prev => [...prev, userMessage])
+    // Initialize assistant message with thinking state
+    const assistantMessage: Message = {
+      role: "assistant",
+      content: "",
+      thinking: " "
+    }
+
+    setMessages(prev => [...prev, userMessage, assistantMessage])
     setInput("")
     setIsLoading(true)
-    setThinkingStartTime(null)
+    setThinkingStartTime(Date.now())
     setElapsedTime(0)
     setIsThinkingComplete(false)
 
@@ -460,7 +471,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
           body: { temperature: 0 }
         },
         anthropic_config: {
-          headers: { "anthropic-version": "2023-06-01" },
+          headers: {},
           body: {
             temperature: 0,
             model: selectedModel
@@ -468,15 +479,20 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
         }
       }
 
-      const response = await fetch("https://api.deepclaude.com", {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      }
+
+      // If openRouter token exists, only use that
+      if (apiTokens.openRouterApiToken) {
+          headers["X-OpenRouter-API-Token"] = apiTokens.openRouterApiToken;
+      }
+
+      const response = await fetch(process.env.NEXT_PUBLIC_API_URL || '/api', {
         method: "POST",
         signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-DeepSeek-API-Token": apiTokens.deepseekApiToken,
-          "X-Anthropic-API-Token": apiTokens.anthropicApiToken
-        },
+        headers,
         body: JSON.stringify(requestBody)
       })
 
@@ -484,11 +500,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
       if (!reader) throw new Error("No reader available")
 
       // Initialize current message
-      currentMessageRef.current = {
-        role: "assistant",
-        content: "",
-        thinking: ""
-      }
+      currentMessageRef.current = assistantMessage
 
       let isThinking = false
 
@@ -576,6 +588,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
       }
     } catch (error) {
       console.error("Error:", error)
+      alert("An error occurred while processing your request. Please try again.");
       // Track error
       posthog.capture('chat_error', {
         chat_id: currentChatId,
@@ -598,7 +611,7 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
     }
   }
 
-  const hasApiTokens = apiTokens.deepseekApiToken && apiTokens.anthropicApiToken
+  const hasApiTokens = apiTokens.openRouterApiToken
 
   return (
     <div className="flex min-h-screen">
@@ -721,49 +734,6 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
               ))}
             </div>
           </div>
-
-          {/* Bottom Section */}
-          {/* Bottom Section */}
-          <div className="flex-shrink-0 p-4 pb-8 border-t border-border/40 space-y-4">
-            <a
-              href="https://github.com/getAsterisk/deepclaude/issues/new"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                posthog.capture('github_issue_click', {
-                  timestamp: new Date().toISOString()
-                })
-              }}
-            >
-              <Button
-                variant="outline"
-                className="w-full"
-              >
-                <Github className="h-4 w-4 mr-2" />
-                File a bug on GitHub
-              </Button>
-            </a>
-
-            <div className="flex items-center justify-center text-sm text-muted-foreground whitespace-nowrap">
-              <span className="flex-shrink-0 mr-1">An</span>
-              <a
-                href="https://asterisk.so/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:opacity-80 transition-opacity flex items-center mx-1"
-              >
-                <Image
-                  src="/asterisk.png"
-                  alt="Asterisk Logo"
-                  width={90}
-                  height={30}
-                  className="inline-block"
-                  quality={100}
-                />
-              </a>
-              <span className="flex-shrink-0">side project ❤️</span>
-            </div>
-          </div>
         </div>
       </aside>
 
@@ -809,18 +779,9 @@ export function Chat({ selectedModel, onModelChange, apiTokens }: ChatProps) {
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {[
-                    "claude-3-5-sonnet-20241022",
-                    "claude-3-5-sonnet-latest",
-                    "claude-3-5-haiku-20241022",
-                    "claude-3-5-haiku-latest",
-                    "claude-3-opus-20240229",
-                    "claude-3-opus-latest"
-                  ].map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="anthropic/claude-3.5-sonnet">
+                    anthropic/claude-3-5-sonnet
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <Button
